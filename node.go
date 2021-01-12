@@ -342,7 +342,64 @@ func (n *node) forEachAt(ctx context.Context, bs cbor.IpldStore, bitWidth uint, 
 		}
 	}
 	return nil
+}
 
+// Recursive implementation backing ForEachMatching and ForEachMatchingAt. Performs a
+// depth-first walk of the tree, beginning at the 'start' index. The 'offset'
+// argument helps us locate the lateral position of the current node so we can
+// figure out the appropriate 'index', since indexes are not stored with values
+// and can only be determined by knowing how far a leaf node is removed from
+// the left-most leaf node.
+func (n *node) forEachMatchingAt(ctx context.Context, bs cbor.IpldStore, bitWidth uint, height int, start, offset uint64, m func(c cid.Cid) bool, cb func(uint64, *cbg.Deferred) error) error {
+	if height == 0 {
+		// height=0 means we're at leaf nodes and get to use our callback
+		for i, v := range n.values {
+			if v != nil {
+				ix := offset + uint64(i)
+				if ix < start {
+					// if we're here, 'start' is probably somewhere in the
+					// middle of this node's elements
+					continue
+				}
+
+				// use 'offset' to determine the actual index for this element, it
+				// tells us how distant we are from the left-most leaf node
+				if err := cb(offset+uint64(i), v); err != nil {
+					return err
+				}
+			}
+		}
+
+		return nil
+	}
+
+	subCount := nodesForHeight(bitWidth, height)
+	for i, ln := range n.links {
+		if ln == nil || !m(ln.cid) {
+			continue
+		}
+
+		// 'offs' tells us the index of the left-most element of the subtree defined
+		// by 'sub'
+		offs := offset + (uint64(i) * subCount)
+		nextOffs := offs + subCount
+		if start >= nextOffs {
+			// if we're here, 'start' lets us skip this entire sub-tree
+			continue
+		}
+
+		subn, err := ln.load(ctx, bs, bitWidth, height-1)
+		if err != nil {
+			return err
+		}
+
+		// recurse into the child node, providing 'offs' to tell it where it's
+		// located in the tree
+		if err := subn.forEachMatchingAt(ctx, bs, bitWidth, height-1, start, offs, m, cb); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 var errNoVals = fmt.Errorf("no values")

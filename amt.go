@@ -330,10 +330,22 @@ func (r *Root) ForEach(ctx context.Context, cb func(uint64, *cbg.Deferred) error
 	return r.node.forEachAt(ctx, r.store, r.bitWidth, r.height, 0, 0, cb)
 }
 
+// ForEachMatching iterates over the entire AMT descending into child nodes when m(link) returns true and calls the cb
+// function for each entry found in the leaf nodes. The callback will receive the index and the value of each element.
+func (r *Root) ForEachMatching(ctx context.Context, m func(cid.Cid) bool, cb func(uint64, *cbg.Deferred) error) error {
+	return r.node.forEachMatchingAt(ctx, r.store, r.bitWidth, r.height, 0, 0, m, cb)
+}
+
 // ForEachAt iterates over the AMT beginning from the given start index. See
 // ForEach for more details.
 func (r *Root) ForEachAt(ctx context.Context, start uint64, cb func(uint64, *cbg.Deferred) error) error {
 	return r.node.forEachAt(ctx, r.store, r.bitWidth, r.height, start, 0, cb)
+}
+
+// ForEachAt iterates over the AMT beginning from the given start index descending into child nodes when m(link) returns
+// true. See ForEach for more details.
+func (r *Root) ForEachMatchingAt(ctx context.Context, start uint64, m func(cid.Cid) bool, cb func(uint64, *cbg.Deferred) error) error {
+	return r.node.forEachMatchingAt(ctx, r.store, r.bitWidth, r.height, start, 0, m, cb)
 }
 
 // FirstSetIndex finds the lowest index in this AMT that has a value set for
